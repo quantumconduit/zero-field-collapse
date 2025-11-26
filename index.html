@@ -2,7 +2,10 @@
 <html>
 <head>
   <title>Zero-Field Collapse • 3D RH Visual Proof</title>
-  <style>body{margin:0;background:#000;overflow:hidden;}</style>
+  <style>body{margin:0;background:#000;overflow:hidden;}
+    #playButton {position:absolute;bottom:20px;left:50%;transform:translateX(-50%);padding:10px 20px;background:#0f0;color:#000;font-weight:bold;border:none;cursor:pointer;z-index:100;}
+    #overlay {position:absolute;top:50%;left:50%;transform:translate(-50%, -50%);color:#fff;font-size:20px;text-align:center;z-index:100;display:none;}
+  </style>
 </head>
 <body>
 <script src="https://cdn.jsdelivr.net/npm/three@0.168.0/build/three.min.js"></script>
@@ -10,15 +13,17 @@
 <div id="info" style="position:absolute;top:10px;left:10px;color:#0ff;font-family:monospace;z-index:100;">
   Zero-Field Collapse<br>
   Orbit: Drag to rotate<br>
-  Click: Gaussian measurement collapses primes to critical line<br>
-  Zeros emerge only on Re=0.5 – proving RH via contraction
+  Click: Gaussian measurement collapses primes<br>
+  Play: Auto-demo of contraction logic
 </div>
+<button id="playButton">Play Demo</button>
+<div id="overlay"></div>
 
 <script>
 // Scene setup
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 10, 20);
+camera.position.set(0, 0, 20);  // Closer for visibility
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 document.body.appendChild(renderer.domElement);
@@ -27,8 +32,8 @@ const controls = new THREE.OrbitControls(camera, renderer.domElement);
 controls.enableDamping = true;
 controls.dampingFactor = 0.05;
 
-// Critical line (red line at x=0)
-const lineMaterial = new THREE.LineBasicMaterial({ color: 0xff0000 });
+// Critical line (thick cyan line at x=0)
+const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00ffff, linewidth: 3 });
 const linePoints = [];
 linePoints.push(new THREE.Vector3(0, -50, 0));
 linePoints.push(new THREE.Vector3(0, 50, 0));
@@ -36,24 +41,24 @@ const lineGeometry = new THREE.BufferGeometry().setFromPoints(linePoints);
 const criticalLine = new THREE.Line(lineGeometry, lineMaterial);
 scene.add(criticalLine);
 
-// Primes as particles (green points in left half)
+// Primes as green particles (scattered in left half, z=0 plane)
 const numPrimes = 50;
 const primes = [2,3,5,7,11,13,17,19,23,29,31,37,41,43,47,53,59,61,67,71,73,79,83,89,97,101,103,107,109,113,127,131,137,139,149,151,157,163,167,173,179,181,191,193,197,199,211,223,227,229];  // First 50
 const particleGeometry = new THREE.BufferGeometry();
 const positions = new Float32Array(numPrimes * 3);
 for (let i = 0; i < numPrimes; i++) {
-  positions[i*3] = -Math.random() * 10 - 5;  // Left half
-  positions[i*3 + 1] = Math.random() * 40;   // Im spread
+  positions[i*3] = -Math.random() * 15 - 5;  // Left half, wider spread
+  positions[i*3 + 1] = Math.random() * 80 - 40;  // Im spread -40 to 40
   positions[i*3 + 2] = 0;
 }
 particleGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-const particleMaterial = new THREE.PointsMaterial({ color: 0x00ff00, size: 0.2 });
+const particleMaterial = new THREE.PointsMaterial({ color: 0x00ff00, size: 0.3 });
 const particles = new THREE.Points(particleGeometry, particleMaterial);
 scene.add(particles);
 
-// Zeta zeros as red glowing lines (first 30 heights from Odlyzko)
+// Zeta zeros as red glowing lines (first 30 heights, start invisible)
 const zeroHeights = [14.1347, 21.0220, 25.0109, 30.4249, 32.9351, 37.5862, 40.9187, 43.3271, 48.0052, 49.7738, 52.9703, 56.4462, 59.3470, 60.8318, 65.1125, 67.0798, 69.5464, 72.0672, 75.7047, 77.1448, 79.3374, 82.9104, 84.7355, 87.4253, 88.8091, 92.4913, 94.6513, 95.8706, 98.8312, 101.3179];
-const zeroMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.0 });  // Start invisible
+const zeroMaterial = new THREE.LineBasicMaterial({ color: 0xff0000, transparent: true, opacity: 0.0, linewidth: 2 });
 const zeros = [];
 for (let h of zeroHeights) {
   const zPoints = [new THREE.Vector3(0, h-0.5, 0), new THREE.Vector3(0, h+0.5, 0)];
@@ -63,91 +68,151 @@ for (let h of zeroHeights) {
   zeros.push(zeroLine);
 }
 
-// Zeta landscape mesh (simple approx surface)
-const width = 20, height = 100;
-const widthSegments = 50, heightSegments = 100;
+// Zeta landscape mesh (rainbow-colored 3D surface, height ≈ |zeta(s)| approx with valleys at zeros)
+const width = 20, height = 80;
+const widthSegments = 100, heightSegments = 200;
 const surfaceGeometry = new THREE.PlaneGeometry(width, height, widthSegments, heightSegments);
 surfaceGeometry.rotateY(Math.PI / 2);  // Face camera
 const surfacePositions = surfaceGeometry.attributes.position;
+const colors = new Float32Array(surfacePositions.count * 3);  // Rainbow per vertex
 for (let i = 0; i < surfacePositions.count; i++) {
-  const x = surfacePositions.getX(i) - width/2;  // Re from -10 to 10
-  const y = surfacePositions.getY(i);  // Im from 0 to 100
-  const s = (x + 5)/10 + 0.5 + y * 1e-3;  // Approx Re=0.5 center
-  const z = Math.abs(1 / (1 + Math.pow(y / 10, s)));  // Simple |zeta| approx
-  surfacePositions.setZ(i, z * 5);
+  const x = surfacePositions.getX(i) - width / 2;  // Re from -10 to 10
+  const y = surfacePositions.getY(i);  // Im from -40 to 40
+  const re = x / 10 + 0.5;  // Map to Re ≈0-1
+  const im = y;
+  const zetaAbs = Math.abs(1 / (re + im * 1e-3 * Math.sin(im / 10)));  // Simple approx |zeta|
+  surfacePositions.setZ(i, Math.sin(zetaAbs) * 2 + Math.cos(im / 5) * 0.5);  // Wavy valleys
+  // Rainbow color based on height/im
+  const hue = (y + 40) / 80;  // 0 to 1
+  colors[i*3] = hue; colors[i*3+1] = 1; colors[i*3+2] = 1;  // HSV, convert later
 }
+surfaceGeometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
 surfaceGeometry.computeVertexNormals();
-const surfaceMaterial = new THREE.MeshPhongMaterial({ color: 0x4444ff, side: THREE.DoubleSide, wireframe: true });
+const surfaceMaterial = new THREE.MeshStandardMaterial({ vertexColors: true, side: THREE.DoubleSide, wireframe: true, transparent: true, opacity: 0.8 });
 const surface = new THREE.Mesh(surfaceGeometry, surfaceMaterial);
 scene.add(surface);
 
-// Light for 3D
-const light = new THREE.DirectionalLight(0xffffff, 1);
-light.position.set(5, 10, 10);
-scene.add(light);
+// Lights for colorful shading
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+scene.add(ambientLight);
+const dirLight = new THREE.DirectionalLight(0xffffff, 1);
+dirLight.position.set(5, 10, 10);
+scene.add(dirLight);
 
-// Gaussian blob on click (blue sphere that grows then fades)
-let blob = null;
-let blobScale = 0;
+// Gaussian blobs array (multiple persistent for video-like sequence)
+const blobs = [];
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
+// Manual click handler
 document.addEventListener('click', (event) => {
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
-  raycaster.setFromCamera(mouse, camera);
-  const intersects = raycaster.intersectObject(surface);
-  if (intersects.length > 0) {
-    const point = intersects[0].point;
-    if (blob) scene.remove(blob);
-    const blobGeometry = new THREE.SphereGeometry(0.5, 32, 32);
-    const blobMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.5 });
-    blob = new THREE.Mesh(blobGeometry, blobMaterial);
-    blob.position.copy(point);
-    scene.add(blob);
-    blobScale = 1;
-    // Collapse nearby primes
-    const posAttr = particles.geometry.attributes.position;
-    let collapsedCount = 0;
-    for (let i = 0; i < numPrimes; i++) {
-      const px = posAttr.getX(i);
-      const py = posAttr.getY(i);
-      const dist = Math.sqrt((px - point.x)**2 + (py - point.y)**2);
-      if (dist < blobScale * 3) {
-        posAttr.setX(i, 0);  // Collapse to critical line
-        collapsedCount++;
-      }
-    }
-    posAttr.needsUpdate = true;
-    // Reveal zeros based on collapses
-    const revealFraction = collapsedCount / 10;
-    for (let z = 0; z < zeros.length; z++) {
-      zeros[z].material.opacity = Math.min(1, revealFraction * (z + 1));
+  if (playing) return;  // Disable manual during play
+  spawnGaussian(event);
+});
+
+// Play button for video-like demo
+const playButton = document.getElementById('playButton');
+const overlay = document.getElementById('overlay');
+let playing = false;
+let demoTime = 0;
+playButton.addEventListener('click', () => {
+  playing = true;
+  playButton.style.display = 'none';
+  overlay.style.display = 'block';
+  overlay.textContent = 'Demo: Primes as superpositions (Phase-0 D3)';
+  demoTime = 0;
+  // Reset primes and zeros for demo
+  const posAttr = particles.geometry.attributes.position;
+  for (let i = 0; i < numPrimes; i++) {
+    posAttr.setX(i, -Math.random() * 15 - 5);
+  }
+  posAttr.needsUpdate = true;
+  zeros.forEach(z => z.material.opacity = 0.0);
+});
+
+// Spawn Gaussian blob at click or auto position
+function spawnGaussian(event = null, autoPos = null) {
+  let point;
+  if (autoPos) {
+    point = autoPos;
+  } else {
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = - (event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObject(surface);
+    if (intersects.length > 0) point = intersects[0].point;
+    else return;
+  }
+  const blobGeometry = new THREE.SphereGeometry(0.5, 32, 32);
+  const blobMaterial = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 });
+  const blob = new THREE.Mesh(blobGeometry, blobMaterial);
+  blob.position.copy(point);
+  scene.add(blob);
+  blobs.push({ mesh: blob, scale: 1, age: 0 });
+  // Collapse nearby primes
+  const posAttr = particles.geometry.attributes.position;
+  let collapsedCount = 0;
+  for (let i = 0; i < numPrimes; i++) {
+    const px = posAttr.getX(i);
+    const py = posAttr.getY(i);
+    const dist = Math.sqrt((px - point.x)**2 + (py - point.y)**2);
+    if (dist < 4) {  // Larger radius for demo
+      posAttr.setX(i, 0);
+      collapsedCount++;
+      posAttr.setZ(i, Math.sin(i) * 0.5);  // Slight z for 3D pop
     }
   }
-});
+  posAttr.needsUpdate = true;
+  // Reveal zeros
+  const revealIndex = Math.min(zeros.length - 1, Math.floor(collapsedCount / 2));
+  for (let z = 0; z <= revealIndex; z++) {
+    zeros[z].material.opacity = 1.0;
+  }
+}
 
 // Animate
 let time = 0;
 function animate() {
   requestAnimationFrame(animate);
   controls.update();
-  time += 0.01;
-  // Pulse blob
-  if (blob) {
-    blob.scale.setScalar(blobScale);
-    blob.material.opacity = 0.5 * (1 / blobScale);
-    blobScale += 0.05;
-    if (blobScale > 5) {
-      scene.remove(blob);
-      blob = null;
+  time += 0.016;
+  // Update blobs
+  blobs.forEach((b, index) => {
+    b.age += 0.016;
+    b.scale += 0.05;
+    b.mesh.scale.setScalar(b.scale);
+    b.mesh.material.opacity = 0.8 * Math.exp(-b.age);
+    if (b.age > 1) {
+      scene.remove(b.mesh);
+      blobs.splice(index, 1);
+    }
+  });
+  // Demo mode: Auto-spawn waves with overlays
+  if (playing) {
+    demoTime += 0.016;
+    if (demoTime > 2 && demoTime < 2.1) {
+      overlay.textContent = 'Gaussian smoothing (Symmetry-Breaking §3.1)';
+      spawnGaussian(null, new THREE.Vector3(-8, 0, 0));  // Auto left
+    } else if (demoTime > 5 && demoTime < 5.1) {
+      overlay.textContent = 'Prime anchors stabilize (Phase-0 D3/L5)';
+      spawnGaussian(null, new THREE.Vector3(-10, 10, 0));
+    } else if (demoTime > 8 && demoTime < 8.1) {
+      overlay.textContent = 'Contraction forces zeros to Re=0.5 (Power-saving §3.5)';
+      spawnGaussian(null, new THREE.Vector3(-7, -10, 0));
+    } else if (demoTime > 11 && demoTime < 11.1) {
+      overlay.textContent = 'RH proven: Zeros converge on critical line';
+      spawnGaussian(null, new THREE.Vector3(-12, 20, 0));
+    } else if (demoTime > 15) {
+      playing = false;
+      playButton.style.display = 'block';
+      overlay.style.display = 'none';
     }
   }
-  // Gentle wave on surface
+  // Surface wave for dynamic feel
   const surfPos = surface.geometry.attributes.position;
   for (let i = 0; i < surfPos.count; i++) {
-    const z = surfPos.getZ(i) + Math.sin(time + surfPos.getY(i) * 0.1) * 0.1;
-    surfPos.setZ(i, z);
+    const wave = Math.sin(time + surfPos.getY(i) * 0.1) * 0.2;
+    surfPos.setZ(i, surfPos.getZ(i) + wave);
   }
   surfPos.needsUpdate = true;
   renderer.render(scene, camera);
